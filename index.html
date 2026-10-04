@@ -4,22 +4,20 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>BEIJING 2026</title>
-
   <meta name="theme-color" content="#d71920" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="BEIJING 2026" />
-
   <link rel="manifest" href="./manifest.json" />
   <link rel="apple-touch-icon" sizes="180x180" href="./icon-180.png" />
-
   <style>
     html,body,#appframe{width:100%;height:100%;margin:0;padding:0;border:0;background:#faf9f5}
     body{overflow:hidden}
     #appframe{display:block}
     #boot{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-      font:600 14px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;color:#7a3034;background:#fff7ef}
+      z-index:2;font:600 14px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;
+      color:#7a3034;background:#fff7ef}
   </style>
 </head>
 <body>
@@ -28,44 +26,45 @@
     allow="geolocation; clipboard-read; clipboard-write; fullscreen"></iframe>
 
   <script>
-    const BRIDGE_CODE = "(() => {\n  'use strict';\n\n  const SUPABASE_URL = 'https://kwtprdxdoofblazaqcgc.supabase.co';\n  const SUPABASE_KEY = 'sb_publishable_FO6Hi9QrGuVQ2UAfeqiFLw_76T7IoCp';\n  const TRIP_ID = 'beijing-2026';\n  const STATE_KEY = '__github_state__';\n  const nativeFetch = window.fetch.bind(window);\n\n  // Make the existing app believe shared sync is connected.\n  // No real GitHub credential is stored or used.\n  try { localStorage.setItem('bj_gh_token', 'supabase-bridge'); } catch (_) {}\n\n  const apiHeaders = (extra) => Object.assign({\n    'apikey': SUPABASE_KEY,\n    'Authorization': 'Bearer ' + SUPABASE_KEY\n  }, extra || {});\n\n  const utf8ToB64 = (s) => {\n    const bytes = new TextEncoder().encode(s);\n    let bin = '';\n    for (let i = 0; i < bytes.length; i += 0x8000) {\n      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));\n    }\n    return btoa(bin);\n  };\n\n  const b64ToUtf8 = (b64) => {\n    const bin = atob(String(b64 || '').replace(/\\s/g, ''));\n    const bytes = new Uint8Array(bin.length);\n    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);\n    return new TextDecoder().decode(bytes);\n  };\n\n  const b64ToBytes = (b64) => {\n    const bin = atob(String(b64 || '').replace(/\\s/g, ''));\n    const bytes = new Uint8Array(bin.length);\n    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);\n    return bytes;\n  };\n\n  async function getStateRow() {\n    const u = SUPABASE_URL +\n      '/rest/v1/trip_notes?trip_id=eq.' + encodeURIComponent(TRIP_ID) +\n      '&place_id=eq.' + encodeURIComponent(STATE_KEY) +\n      '&select=id,note,updated_at&order=updated_at.desc&limit=1';\n    const r = await nativeFetch(u, { headers: apiHeaders(), cache: 'no-store' });\n    if (!r.ok) throw new Error('Supabase state read ' + r.status);\n    const rows = await r.json();\n    return rows && rows[0] ? rows[0] : null;\n  }\n\n  async function replaceState(jsonText, expectedSha) {\n    const current = await getStateRow();\n\n    // Preserve the old GitHub-style optimistic-concurrency behavior.\n    if (expectedSha && current && expectedSha !== current.updated_at) {\n      return { conflict: true, current };\n    }\n\n    // Delete the prior bridge rows, then write one fresh state snapshot.\n    const delUrl = SUPABASE_URL +\n      '/rest/v1/trip_notes?trip_id=eq.' + encodeURIComponent(TRIP_ID) +\n      '&place_id=eq.' + encodeURIComponent(STATE_KEY);\n    const dr = await nativeFetch(delUrl, {\n      method: 'DELETE',\n      headers: apiHeaders({ 'Prefer': 'return=minimal' })\n    });\n    if (!dr.ok) throw new Error('Supabase state delete ' + dr.status);\n\n    const now = new Date().toISOString();\n    const ir = await nativeFetch(SUPABASE_URL + '/rest/v1/trip_notes', {\n      method: 'POST',\n      headers: apiHeaders({\n        'Content-Type': 'application/json',\n        'Prefer': 'return=representation'\n      }),\n      body: JSON.stringify({\n        trip_id: TRIP_ID,\n        day: 0,\n        place_id: STATE_KEY,\n        note: jsonText,\n        updated_at: now\n      })\n    });\n    if (!ir.ok) throw new Error('Supabase state write ' + ir.status);\n    const rows = await ir.json();\n    const row = rows && rows[0] ? rows[0] : { updated_at: now };\n    return { conflict: false, row };\n  }\n\n  async function uploadPhoto(path, base64Data) {\n    const bytes = b64ToBytes(base64Data);\n    const u = SUPABASE_URL + '/storage/v1/object/trip-photos/' +\n      path.split('/').map(encodeURIComponent).join('/');\n    const r = await nativeFetch(u, {\n      method: 'POST',\n      headers: apiHeaders({\n        'Content-Type': 'image/jpeg',\n        'x-upsert': 'false'\n      }),\n      body: bytes\n    });\n    if (!r.ok) {\n      const txt = await r.text().catch(() => '');\n      throw new Error('Supabase photo upload ' + r.status + ' ' + txt);\n    }\n\n    // Also record basic photo metadata when possible.\n    try {\n      const slotMatch = path.match(/^data\\/photos\\/(.+?)-\\d+\\.jpg$/);\n      const slot = slotMatch ? slotMatch[1] : 'shared';\n      const publicUrl = SUPABASE_URL + '/storage/v1/object/public/trip-photos/' +\n        path.split('/').map(encodeURIComponent).join('/');\n      await nativeFetch(SUPABASE_URL + '/rest/v1/trip_photos', {\n        method: 'POST',\n        headers: apiHeaders({\n          'Content-Type': 'application/json',\n          'Prefer': 'return=minimal'\n        }),\n        body: JSON.stringify({\n          trip_id: TRIP_ID,\n          day: 0,\n          place_id: slot,\n          photo_url: publicUrl,\n          file_path: path,\n          uploaded_at: new Date().toISOString()\n        })\n      });\n    } catch (_) {}\n  }\n\n  function jsonResponse(obj, status) {\n    return new Response(JSON.stringify(obj), {\n      status: status || 200,\n      headers: { 'Content-Type': 'application/json' }\n    });\n  }\n\n  // Compatibility layer:\n  // Existing/future versions of this travel app may still call the GitHub\n  // Contents API. We transparently redirect those state/photo operations\n  // to Supabase instead, so app.html does not need the Supabase code.\n  window.fetch = async function(input, init) {\n    const reqUrl = typeof input === 'string' ? input : (input && input.url) || '';\n    const method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();\n\n    const m = reqUrl.match(\n      /^https:\\/\\/api\\.github\\.com\\/repos\\/Pviaviation\\/beijing\\/contents\\/([^?]+)/\n    );\n    if (!m) return nativeFetch(input, init);\n\n    const path = decodeURIComponent(m[1]);\n\n    try {\n      if (path === 'data/state.json' && method === 'GET') {\n        const row = await getStateRow();\n        if (!row) return jsonResponse({ message: 'Not Found' }, 404);\n        return jsonResponse({\n          sha: row.updated_at,\n          content: utf8ToB64(row.note || '{}')\n        }, 200);\n      }\n\n      if (path === 'data/state.json' && method === 'PUT') {\n        const body = JSON.parse((init && init.body) || '{}');\n        const jsonText = b64ToUtf8(body.content || '');\n        const saved = await replaceState(jsonText, body.sha || null);\n        if (saved.conflict) return jsonResponse({ message: 'Conflict' }, 409);\n        return jsonResponse({\n          content: { sha: saved.row.updated_at || new Date().toISOString() }\n        }, 200);\n      }\n\n      if (path.startsWith('data/photos/') && method === 'PUT') {\n        const body = JSON.parse((init && init.body) || '{}');\n        await uploadPhoto(path, body.content || '');\n        return jsonResponse({\n          content: { sha: new Date().toISOString(), path }\n        }, 201);\n      }\n\n      return jsonResponse({ message: 'Not Found' }, 404);\n    } catch (err) {\n      console.warn('[BEIJING Supabase bridge]', err);\n      // A network-style failure lets the app retain its local dirty state\n      // and retry later when connectivity returns.\n      throw err;\n    }\n  };\n\n  window.__BEIJING_SUPABASE_BRIDGE__ = {\n    enabled: true,\n    tripId: TRIP_ID\n  };\n})();";
+    // The existing app checks for a GitHub token before enabling shared write.
+    // This is only a local compatibility flag; the service worker redirects
+    // those sync calls to Supabase, so no real GitHub token is used.
+    try { localStorage.setItem('bj_gh_token', 'supabase-bridge'); } catch (e) {}
 
-    async function loadApp() {
+    async function boot() {
       const frame = document.getElementById('appframe');
-      const boot = document.getElementById('boot');
+      const splash = document.getElementById('boot');
+
       try {
-        const r = await fetch('./app.html', { cache: 'no-store' });
-        if (!r.ok) throw new Error('app.html ' + r.status);
-        let html = await r.text();
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.register('./service-worker.js');
+          await navigator.serviceWorker.ready;
 
-        const bridgeTag =
-          '<script>' + BRIDGE_CODE.replace(/<\/script/gi, '<\\/script') + '<\\/script>';
+          // If a newly installed worker is waiting, activate it immediately.
+          if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
 
-        if (/<head[^>]*>/i.test(html)) {
-          html = html.replace(/<head[^>]*>/i, (m) => m + bridgeTag);
-        } else {
-          html = bridgeTag + html;
+          // On the very first install this page may not yet be controlled.
+          // One reload makes the service-worker bridge active before app.html loads.
+          if (!navigator.serviceWorker.controller) {
+            sessionStorage.setItem('bj_sw_boot', '1');
+            location.reload();
+            return;
+          }
         }
 
         frame.addEventListener('load', () => {
-          boot.style.display = 'none';
+          splash.style.display = 'none';
         }, { once: true });
-        frame.srcdoc = html;
+
+        // Normal URL load, not srcdoc: robust for the 16+ MB standalone bundle.
+        frame.src = './app.html?v=4';
       } catch (e) {
         console.error(e);
-        boot.textContent = 'Không mở được app. Hãy kiểm tra kết nối rồi thử lại.';
+        splash.textContent = 'Không mở được app. Hãy refresh trang.';
       }
     }
 
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./service-worker.js')
-          .catch(console.error)
-          .finally(loadApp);
-      });
-    } else {
-      window.addEventListener('load', loadApp);
-    }
+    window.addEventListener('load', boot);
   </script>
 </body>
 </html>

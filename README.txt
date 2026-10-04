@@ -1,33 +1,24 @@
-BEIJING 2026 — FIXED PWA/SUPABASE SHELL
+BEIJING 2026 — FIXED SHELL v2
 
-UPLOAD ONCE AND KEEP:
+This version fixes the blank-page issue in the previous shell.
+The prior version loaded the 16+ MB standalone app through iframe srcdoc.
+This version loads app.html normally by URL and moves the Supabase compatibility
+bridge into the service worker.
+
+UPLOAD ALL FILES ONCE:
 - index.html
-- manifest.json
 - service-worker.js
+- manifest.json
 - icon-180.png
 - icon-192.png
 - icon-512.png
-
-THE ONLY FILE YOU NORMALLY REPLACE LATER:
 - app.html
 
-How it works:
-1. index.html loads the latest app.html.
-2. Before app.html executes, index.html injects a compatibility bridge.
-3. The existing app may continue to call the old GitHub sync functions, but those calls are redirected to Supabase.
-4. Shared state is stored in Supabase; no GitHub token is required on any phone.
-5. Photo uploads are redirected to the Supabase Storage bucket trip-photos.
-6. The service worker maps the app's old /data/photos/... image URLs to Supabase automatically.
-7. app.html remains the editable content file.
+LATER:
+Normally replace only app.html.
 
-Important compatibility note:
-This lets you replace app.html without manually adding Supabase code, PROVIDED future versions remain based on the same BEIJING app structure and continue using the current shared-state/photo functions. If a future generator completely rewrites the app architecture or removes those functions/local state conventions, the fixed shell may need one compatibility update.
-
-Offline:
-- Last successfully loaded app.html is cached.
-- Notes/choices still save locally in the app when offline and retry cloud sync later.
-- Previously viewed shared photos can be cached.
-- New photo upload requires internet.
-
-Xiaohongshu/RedNote:
-Supabase does not repair expired or invalid Xiaohongshu share links. That is a separate deep-link issue.
+Important:
+After uploading this v2 package, hard-refresh the site.
+If the previous blank shell is still cached, open:
+https://pviaviation.github.io/beijing/?v=4
+and refresh once. The new service worker will activate and then normal URL works.
