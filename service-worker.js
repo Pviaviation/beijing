@@ -1,4 +1,4 @@
-const SHELL_CACHE = 'beijing-2026-shell-v4';
+const SHELL_CACHE = 'beijing-2026-shell-v5';
 const PHOTO_CACHE = 'beijing-2026-photos-v2';
 
 const SUPABASE_URL = 'https://kwtprdxdoofblazaqcgc.supabase.co';

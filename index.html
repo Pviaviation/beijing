@@ -31,6 +31,97 @@
     // those sync calls to Supabase, so no real GitHub token is used.
     try { localStorage.setItem('bj_gh_token', 'supabase-bridge'); } catch (e) {}
 
+    function patchLegacySyncUI(frame) {
+      try {
+        const doc = frame.contentDocument;
+        if (!doc || !doc.body) return;
+
+        const patch = () => {
+          const all = Array.from(doc.querySelectorAll('*'));
+
+          // Find the old heading and its surrounding sync card.
+          const heading = all.find(el =>
+            el.children.length === 0 &&
+            (el.textContent || '').trim() === 'Đồng bộ nhóm qua GitHub'
+          );
+
+          if (!heading) return false;
+
+          heading.textContent = 'Đồng bộ nhóm · Supabase';
+
+          // Walk upward until we find a container that also contains the token input/buttons.
+          let card = heading.parentElement;
+          for (let i = 0; i < 6 && card; i++, card = card.parentElement) {
+            const txt = card.textContent || '';
+            if (txt.includes('github_pat_') || txt.includes('Lưu & đồng bộ') || txt.includes('Tải lại từ nhóm')) break;
+          }
+
+          if (!card) return true;
+
+          // Remove legacy explanatory text mentioning GitHub/token.
+          Array.from(card.querySelectorAll('*')).forEach(el => {
+            const t = (el.textContent || '').trim();
+            if (
+              t.includes('Dán token GitHub') ||
+              t.includes('github_pat_') ||
+              t === 'Lưu & đồng bộ' ||
+              t === 'Tải lại từ nhóm'
+            ) {
+              if (el.tagName === 'INPUT' || el.tagName === 'BUTTON') {
+                el.style.display = 'none';
+              } else if (!el.children.length) {
+                el.style.display = 'none';
+              }
+            }
+          });
+
+          // Hide text inputs in this legacy sync card.
+          card.querySelectorAll('input').forEach(inp => {
+            const ph = inp.getAttribute('placeholder') || '';
+            if (ph.includes('github_pat') || inp.type === 'password' || inp.type === 'text') {
+              inp.style.display = 'none';
+            }
+          });
+
+          // Hide the two legacy GitHub buttons.
+          card.querySelectorAll('button').forEach(btn => {
+            const t = (btn.textContent || '').trim();
+            if (t === 'Lưu & đồng bộ' || t === 'Tải lại từ nhóm') btn.style.display = 'none';
+          });
+
+          // Add a clear Supabase status note once.
+          if (!card.querySelector('[data-supabase-shell-note]')) {
+            const note = doc.createElement('div');
+            note.setAttribute('data-supabase-shell-note', '1');
+            note.textContent = '☁️ Tự động đồng bộ cho cả nhóm qua Supabase · không cần token';
+            note.style.cssText =
+              'margin-top:8px;padding:10px 12px;border-radius:12px;background:#e9f8f3;' +
+              'color:#0f6b60;font-size:12px;line-height:1.45;font-weight:600;';
+            card.appendChild(note);
+          }
+
+          return true;
+        };
+
+        if (patch()) return;
+
+        // The app renders asynchronously after unpacking, so watch until the UI appears.
+        const mo = new MutationObserver(() => {
+          if (patch()) {
+            // Keep observer a little longer in case React re-renders the block.
+            setTimeout(() => mo.disconnect(), 3000);
+          }
+        });
+        mo.observe(doc.documentElement, { childList: true, subtree: true });
+
+        setTimeout(() => {
+          try { patch(); } catch (_) {}
+        }, 1200);
+      } catch (e) {
+        console.warn('[BEIJING] UI patch skipped:', e);
+      }
+    }
+
     async function boot() {
       const frame = document.getElementById('appframe');
       const splash = document.getElementById('boot');
@@ -40,11 +131,8 @@
           const reg = await navigator.serviceWorker.register('./service-worker.js');
           await navigator.serviceWorker.ready;
 
-          // If a newly installed worker is waiting, activate it immediately.
           if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
 
-          // On the very first install this page may not yet be controlled.
-          // One reload makes the service-worker bridge active before app.html loads.
           if (!navigator.serviceWorker.controller) {
             sessionStorage.setItem('bj_sw_boot', '1');
             location.reload();
@@ -54,10 +142,10 @@
 
         frame.addEventListener('load', () => {
           splash.style.display = 'none';
+          patchLegacySyncUI(frame);
         }, { once: true });
 
-        // Normal URL load, not srcdoc: robust for the 16+ MB standalone bundle.
-        frame.src = './app.html?v=4';
+        frame.src = './app.html?v=5';
       } catch (e) {
         console.error(e);
         splash.textContent = 'Không mở được app. Hãy refresh trang.';

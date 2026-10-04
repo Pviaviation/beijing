@@ -22,3 +22,9 @@ After uploading this v2 package, hard-refresh the site.
 If the previous blank shell is still cached, open:
 https://pviaviation.github.io/beijing/?v=4
 and refresh once. The new service worker will activate and then normal URL works.
+
+
+v3 UI cleanup:
+- The old "Đồng bộ nhóm qua GitHub" token UI is automatically hidden by index.html.
+- The app shows "Đồng bộ nhóm · Supabase" and no token entry is required.
+- app.html remains unchanged and replaceable.
