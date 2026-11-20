@@ -261,29 +261,25 @@ self.addEventListener('fetch', event => {
 
   if (url.origin !== self.location.origin) return;
 
-  // app.html: always prefer the newest version online; use last cached copy offline.
-  if (url.pathname.endsWith('/app.html')) {
-    event.respondWith(
-      fetch(req, { cache: 'no-store' })
-        .then(r => {
-          if (r.ok) caches.open(SHELL_CACHE).then(c => c.put('./app.html', r.clone()));
-          return r;
-        })
-        .catch(() => caches.match('./app.html'))
-    );
-    return;
-  }
-
-  // index.html also prefers network, so deployments are picked up quickly.
-  if (url.pathname.endsWith('/index.html') || url.pathname.endsWith('/beijing/')) {
-    event.respondWith(
-      fetch(req, { cache: 'no-store' })
-        .then(r => {
-          if (r.ok) caches.open(SHELL_CACHE).then(c => c.put('./index.html', r.clone()));
-          return r;
-        })
-        .catch(() => caches.match('./index.html'))
-    );
+  // app.html / index.html: if a copy is cached, never wait more than a few
+  // seconds for the network (slow or blocked networks, e.g. in mainland China).
+  // The download keeps going in the background and refreshes the cache for next time.
+  const isApp = url.pathname.endsWith('/app.html');
+  const isIndex = url.pathname.endsWith('/index.html') || url.pathname.endsWith('/beijing/');
+  if (isApp || isIndex) {
+    const key = isApp ? './app.html' : './index.html';
+    event.respondWith((async () => {
+      const cached = await caches.match(key);
+      const net = fetch(req, { cache: 'no-store' }).then(r => {
+        if (r.ok) caches.open(SHELL_CACHE).then(c => c.put(key, r.clone()));
+        return r;
+      });
+      event.waitUntil(net.catch(() => {}));
+      if (!cached) return net.catch(() => new Response('Offline', { status: 503 }));
+      const timeout = new Promise(res => setTimeout(() => res(null), isApp ? 3000 : 2500));
+      const first = await Promise.race([net.catch(() => null), timeout]);
+      return (first && first.ok) ? first : cached;
+    })());
     return;
   }
 
